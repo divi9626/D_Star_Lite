@@ -10,11 +10,14 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
 ########## D* Lite #############
+
+## global variables 
 global map_cost
 map_cost = {}
 global map_key
 map_key = {}
-## global variables ## [g,rhs,heuristic]
+global start
+global goal
 
 
 ###############################################################################
@@ -36,6 +39,7 @@ def initialize(map_cost,map_key,height,width,goal):  # takes in goal to initiali
             map_cost[(i,j)] = [INF-1,INF-1,INF-1] ## g,rhs,h
             map_key[(i,j)] = [INF-1,INF-1] ## key
     map_cost[goal] = [INF-1,0,INF-1]
+    map_cost[start][1] = INF-2  ## new_INF = INF - 1 -----> start_rhs = new_INF - 1
     #queue.append(key) ###  list/priority_queue
     return map_cost, map_key
 #------------------------------------------------------------------------------
@@ -46,12 +50,12 @@ def hueristic(start,current):
     return h
 #############################################################################
 #------------------------------------------------------------------------------
-def updatedge(obstacle_node,queue):
+def updatedge(obstacle_node,queue_key):
     
     node = obstacle_node
     x,y = node[0],node[1]
-    
-################## update rhs value of neighbours ##########################
+    movement = {'up': (0,1), 'down' : (0,-1), 'left': (-1,0), 'right' : (1,0), 'upright' : (1,1), 'downright' : (1,-1), 'upleft':(-1,1), 'downleft':(-1,-1) }
+    ############## update rhs value of neighbours ##################
         
     '''update rhs value of children (predecessors)'''
     children = []
@@ -70,8 +74,8 @@ def updatedge(obstacle_node,queue):
     for child in children:
         if map_cost[child][0] != map_cost[child][1]:            ## inconsistent (i.e g != rhs)
             map_key[child] = calculateKey(map_cost[child][0],map_cost[child][1],map_cost[child][2],km)
-            queue.put((map_key[child],child))
-    return queue
+            queue_key.put((map_key[child],child))
+    return queue_key
 ############################################################################
 #------------------------------------------------------------------------------
     
@@ -83,14 +87,14 @@ def calculateKey(g,rhs,h,km):
 movement = {'up': (0,1), 'down' : (0,-1), 'left': (-1,0), 'right' : (1,0), 'upright' : (1,1), 'downright' : (1,-1), 'upleft':(-1,1), 'downleft':(-1,-1) }
 #------------------------------------------------------------------------------
 #################### compute shortest distance #############################
-def computeShortestPath(queue,start,map_cost,map_key,iteration):  ## simple backward A*
+def computeShortestPath(queue_key,start,map_cost,map_key,iteration):  ## simple backward A*
     
     count = 0
     visited = []
     parent_map = {}               ## dictionary for backtracking
     parent_map[goal] = None
     
-    queue.put((map_key[goal],goal))
+    queue_key.put((map_key[goal],goal))
     node = goal
     movement = {'up': (0,1), 'down' : (0,-1), 'left': (-1,0), 'right' : (1,0), 'upright' : (1,1), 'downright' : (1,-1), 'upleft':(-1,1), 'downleft':(-1,-1) }
     
@@ -99,7 +103,7 @@ def computeShortestPath(queue,start,map_cost,map_key,iteration):  ## simple back
         count += 1
         ''' Update State '''
         ##################################################################
-        node = queue.get()[1]                              # store coords tuple
+        node = queue_key.get()[1]                              # store coords tuple
         if map_cost[node][0] > map_cost[node][1]:
             map_cost[node][0] = map_cost[node][1]          ## g value = rhs value after dequeing
 
@@ -109,7 +113,7 @@ def computeShortestPath(queue,start,map_cost,map_key,iteration):  ## simple back
         else:
             continue
         ##################################################################
-        #if map_cost[node][0] == map_cost[node][1] and map_cost[node][0] != INF:
+        
         visited.append(node)
         x,y = node[0], node[1]
 
@@ -146,19 +150,22 @@ def computeShortestPath(queue,start,map_cost,map_key,iteration):  ## simple back
             if child not in visited:
                 if map_cost[child][0] != map_cost[child][1]:            ## inconsistent (i.e g != rhs)
                     map_key[child] = calculateKey(map_cost[child][0],map_cost[child][1],map_cost[child][2],km)
-                    queue.put((map_key[child],child))
+                    queue_key.put((map_key[child],child))
         ########### if the node is still inconsistent ############
         map_key[node] = calculateKey(map_cost[node][0],map_cost[node][1],map_cost[node][2],km)
         if map_cost[node][0] != map_cost[node][1]:
-            queue.put((map_key[node],node))
+            if node != goal:
+                queue_key.put((map_key[node],node))
         ########## Don't exit if the start g nd rhs are INF
         if map_cost[start][0] == map_cost[start][1] and map_cost[start][1] == INF:  
-            map_cost[start][1] == INF - 1                        ## to not exit when start g == rhs but they are INF
-
+            map_cost[start][1] == INF - 1
+                        ## to not exit when start g == rhs but they are INF
+    map_cost[goal][0], map_cost[goal][1] = 0,0
     print(len(visited))
-    print(map_key)
+    print(node)
+    #print(map_key)
     
-    return map_cost,queue,visited,parent_map
+    return map_cost,visited,parent_map
 #------------------------------------------------------------------------------
 
 ######### backtracking ###############
@@ -182,35 +189,26 @@ def next_best(start):
         if node[0] < 0 or node[0] > 20 or node[1] < 0 or node[1] > 20:                ## checking for illegal nodes
             continue
         cost = map_cost[node][0]                                                      ## storing g value
-        if map_cost[node][0] == map_cost[node][1]:                                    ## making sure node is consistent
-            #print(cost,node,map_cost[node])
-            if cost < min_cost:   
-                min_cost = cost                                                       ## replacing  min cost
-                new_start = node                                                      ## Updating the start node if cost is less
+        #print(cost,node,map_cost[node])
+        if cost < min_cost:   
+            min_cost = cost                                                       ## replacing  min cost
+            new_start = node                                                      ## Updating the start node if cost is less
     return new_start
 
 #------------------------------------------------------------------------------
-####################### main #############################################
+####################### initialise #############################################
 
-height = 21
-width = 21
-start = (1,1)
-goal = (19,19)
-map_cost = {}
-map_key = {}
-map_key_dup = {}
+height, width = 21, 21
+start, goal = (1,1), (19,19)
 
 map_cost, map_key = initialize(map_cost,map_key,height,width,goal)
 
-map_cost[start][1] = INF-2  ## new_INF = INF - 1 -----> start_rhs = new_INF - 1
-queue = PriorityQueue()
-
 km = 0
 iteration = 1
-
 h = hueristic(start,goal)
 map_key[goal] = calculateKey(map_cost[goal][0],map_cost[goal][1],h,km)
-map_cost, map_key, visited, parent_map = computeShortestPath(queue,start,map_cost,map_key,iteration)
+queue_key = PriorityQueue()
+map_cost, visited, parent_map = computeShortestPath(queue_key,start,map_cost,map_key,iteration)
 
 
 ########################## Animation #######################################
@@ -228,6 +226,29 @@ plt.draw()
 plt.show()
 
 path = backtrack(parent_map)
-#print(path)
-start = next_best(start)
-print(start)
+print(path)
+
+################### main ###########################################
+dynamic_obstacle = [(6,8),(13,14),(16,17)]
+while (start != goal):
+    iteration = 1
+    new_start = next_best(start)           ## update start_state
+    km = km + hueristic(new_start, start)
+    start = new_start
+    print(start,map_cost[start])
+    next_node = next_best(start)
+    if next_node in dynamic_obstacle:                            
+        iteration = 2
+        print("I see an obstacle ahead")
+        queue_key = updatedge(next_node,queue_key)
+        computeShortestPath(queue_key,start,map_cost,map_key,iteration)
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
