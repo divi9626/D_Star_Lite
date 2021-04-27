@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Sat Mar 20 21:51:17 2021
-
+Advance Path Planning Algorithm, D*Lite with dynamically moving obstacles
 @author: divyam
 """
 import math
