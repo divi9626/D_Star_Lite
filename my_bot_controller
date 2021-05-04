@@ -77,7 +77,7 @@ def get_odom_data():
 
     Return
     ----------
-    The position (x, y, z) and the yaw of the robot.
+    The position (x, y# velocity_msg.angular.z = 1, z) and the yaw of the robot.
     """
     try:
         (trans, rot) = tf_listener.lookupTransform(parent_frame, child_frame, rospy.Time(0))
@@ -145,7 +145,7 @@ def go_to_goal(last_rot,goall):
     distance_to_goal = computation.compute_distance(pos.x, pos.y, g_x, g_y)
     # proportional control to move the robot forward
     # We will drive the robot at a maximum speed of 0.5
-    velocity_msg.linear.x = min(k_h_gain * distance_to_goal, 0.4)
+    velocity_msg.linear.x = min(k_h_gain * distance_to_goal, 0.2)
 
     # set the z angular velocity for positive and negative rotations
     if velocity_msg.angular.z > 0:
@@ -185,56 +185,52 @@ def sensor_callback(msg):
     front = np.concatenate((front1,front2),axis=None)
     print(front)
 
-    if np.median(front) <= 2.1:
+    if np.median(front) <= 2.8 and np.median(front) >= 1.5:
         detect[obstacle] = 1
         print(detect)
         # goal_dict[goal] = next_best
         print("I see an obstacle ahead")
-        print("3333333333333333333333333333333333333333333333333333333")
         
-        
-        # go_to_goal(last_rotation,goal)
-    print("fffffffffffffff",msg.ranges[0])
-    if msg.ranges[0] <= 0.3:
+    elif np.median(front) <= 0.2:
         rospy.logwarn("Front Obstacle detected")
         rospy.logwarn("I am stuck, turning around")
-        velocity_msg.linear.x = -0.2
-        rotate(75, -2)
+        velocity_msg.linear.x = -0.4
+        rotate(75, -1)
         velocity_msg.linear.x = 1
 
     else:
         # msg.ranges[0] >= 0.5 or avg_front >= 0.5:
         velocity_msg.angular.z = 0
-        velocity_msg.linear.x = 0.2
+        velocity_msg.linear.x = 0.1
         velocity, dist2goal, last_rotation = go_to_goal(last_rotation,goal_next)
         # When goal is within threshold end the code
         # NOTE: FIX B/C SOMETIMES DOESN'T EXECUTE BASED ON ROBOT FRONT DIRECTION
-        if dist2goal <= 0.05:
+        if dist2goal <= 0.1:
             rospy.logwarn("Goal reached---------------------")
             print("%%%%%%%%%%%%%%%%%%%%%",goal_next,next_best)
             velocity_msg.linear.x = 0.0
             velocity_msg.angular.z = 0.0
         # if right has obstacle turn left
-        if avg_test <= 0.25 or msg.ranges[310] <= 0.25 or msg.ranges[320] <= 0.25:
-            if msg.ranges[90] <= 0.25:
-                rospy.logwarn("Left has NO space to turn")
-            else:
-                rospy.logwarn("Right Obstacle detected")
-                # rospy.logwarn("Turn left")
-                go_to_goal(last_rotation,goal_next)
-                velocity_msg.linear.x = 0.0
-                velocity_msg.angular.z = 5
-        # if left has obstacle turn right
-        if msg.ranges[15] <= 0.25 or msg.ranges[45] <= 0.25:
-            if msg.ranges[270] <= 0.25:
-                rospy.logwarn("Right has NO space to turn")
-            else:
-                rospy.logwarn("Left Obstacle detected")
-                # rospy.logwarn("Turn right")
-                go_to_goal(last_rotation,goal_next)
-                velocity_msg.linear.x = 0.0
-                velocity_msg.angular.z = -5
-    # if front gets too close, back up and turn around
+        # if avg_test <= 0.25 or msg.ranges[310] <= 0.25 or msg.ranges[320] <= 0.25:
+        #     if msg.ranges[90] <= 0.25:
+        #         rospy.logwarn("Left has NO space to turn")
+        #     else:
+        #         rospy.logwarn("Right Obstacle detected")
+        #         # rospy.logwarn("Turn left")
+        #         go_to_goal(last_rotation,goal_next)
+        #         velocity_msg.linear.x = 0.0
+        #         velocity_msg.angular.z = 5
+        # # if left has obstacle turn right
+        # if msg.ranges[15] <= 0.25 or msg.ranges[45] <= 0.25:
+        #     if msg.ranges[270] <= 0.25:
+        #         rospy.logwarn("Right has NO space to turn")
+        #     else:
+        #         rospy.logwarn("Left Obstacle detected")
+        #         # rospy.logwarn("Turn right")
+        #         go_to_goal(last_rotation,goal_next)
+        #         velocity_msg.linear.x = 0.0
+        #         velocity_msg.angular.z = -5
+    
     pub.publish(velocity_msg)
     end = time.clock()
     # print("the time is ......",end-start)
@@ -242,11 +238,8 @@ def sensor_callback(msg):
 
 
 def read_scan():
-    start = time.clock()
     """Set up a subscriber for the scan topic"""
     rospy.Subscriber("scan", LaserScan, sensor_callback)
-    end = time.clock()
-    print("the time is ......",end-start)
     # rospy.spin()
 
 # roslaunch turtlebot3_gazebo turtlebot3_world.launch x_pos:=-2 y_pos:=0
@@ -273,7 +266,7 @@ global goal
 
 ###############################################################################
 def obstacle(x,y):
-    # if x>10 and x < 13 and y > 10 and y < 13:
+    # if x>3 and x < 5 and y > 3 and y < 5:
     #     return True
     return False
 
@@ -458,7 +451,7 @@ def next_best(start):
 ####################### initialise #############################################
 
 height, width = 21, 21
-start, goal = (1,1), (6,6)
+start, goal = (1,1), (8,8)
 
 map_cost, map_key = initialize(map_cost,map_key,height,width,goal)
 
@@ -486,7 +479,6 @@ print("Enter goal location, choose between 0-5, 0 being the start")
 global goall
 (position, rotation) = get_odom_data()
 start = (0,0)
-goal = (6,6)
 goall, current = start, start
 goal_dict = {}
 goal_dict[goall] = start
@@ -500,21 +492,20 @@ r = rospy.Rate(50)
 while (current != goal):
     iteration = 1
     new_start = next_best(current)
-    print("the new start is .................",new_start)          ## update start_state
+    print("the new start is ...........",new_start)          ## update start_state
     km = km + hueristic(new_start, current)
     current = copy.deepcopy(new_start)
-    goall = new_start
-    goal_dict[goall] = new_start
+    goall = current
+    goal_dict[goall] = current
     goal_x, goal_y = get_goal(current)
     
     count = 0
-    detect[obstacle] =  0
+    detect[obstacle] = 0
     next_node = next_best(current)
     distance_to_goal = computation.compute_distance(position.x, position.y, goal_x, goal_y)
     while distance_to_goal >= 0.15:
         (position, rotation) = get_odom_data()
-        # rospy.Subscriber("scan", LaserScan, sensor_callback, goall,queue_size=100)
-        r.sleep()
+        
         if detect[obstacle] == 1:
             if count == 0:
                 iteration = 2    
@@ -523,12 +514,12 @@ while (current != goal):
             count += 1
         print(new_start)
         print(detect)
-        # r.sleep()
-        distance_to_goal = computation.compute_distance(position.x, position.y, goal_x, goal_y)
-        if math.sqrt((position.x - new_start[0])**2 + (position.y - new_start[1])**2) <= 0.15:
+        r.sleep()
+        if math.sqrt((position.x - current[0])**2 + (position.y - current[1])**2) <= 0.15:
             print("distance to goal is .......",distance_to_goal)
             rospy.logwarn("AT GOAL BREAKING LOOP")
             break
+
 velocity_msg.linear.x = 0
 velocity_msg.angular.z = 0
 pub.publish(velocity_msg)
